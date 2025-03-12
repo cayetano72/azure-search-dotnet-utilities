@@ -6,13 +6,16 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Net.Http;
+using System.Net.Http.Headers;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using Azure;
+using Azure.Core;
 using Azure.Search.Documents;
 using Azure.Search.Documents.Indexes;
 using Azure.Search.Documents.Models;
+using Azure.Identity;
 using Microsoft.Extensions.Configuration;
 
 namespace AzureSearchBackupRestoreIndex;
@@ -46,6 +49,8 @@ class Program
         BackupIndexAndDocuments();
 
         //Recreate and import content to target index
+
+        /*
         Console.WriteLine("\nSTART INDEX RESTORE");
         DeleteIndex();
         CreateTargetIndex();
@@ -63,6 +68,7 @@ class Program
 
         Console.WriteLine("Press any key to continue...");
         Console.ReadLine();
+        */
     }
 
     static void ConfigurationSetup()
@@ -83,14 +89,14 @@ class Program
         Console.WriteLine("\n  Source service and index {0}, {1}", SourceSearchServiceName, SourceIndexName);
         Console.WriteLine("\n  Target service and index: {0}, {1}", TargetSearchServiceName, TargetIndexName);
         Console.WriteLine("\n  Backup directory: " + BackupDirectory);
-        Console.WriteLine("\nDoes this look correct? Press any key to continue, Ctrl+C to cancel.");
-        Console.ReadLine();
 
-        SourceIndexClient = new SearchIndexClient(new Uri("https://" + SourceSearchServiceName + ".search.windows.net"), new AzureKeyCredential(SourceAdminKey));
+        AzureDeveloperCliCredential azureDeveloperCliCredential = new();
+
+        SourceIndexClient = new SearchIndexClient(new Uri("https://" + SourceSearchServiceName + ".search.windows.net"), azureDeveloperCliCredential);
         SourceSearchClient = SourceIndexClient.GetSearchClient(SourceIndexName);
 
 
-        TargetIndexClient = new SearchIndexClient(new Uri($"https://" + TargetSearchServiceName + ".search.windows.net"), new AzureKeyCredential(TargetAdminKey));
+        TargetIndexClient = new SearchIndexClient(new Uri($"https://" + TargetSearchServiceName + ".search.windows.net"), azureDeveloperCliCredential);
         TargetSearchClient = TargetIndexClient.GetSearchClient(TargetIndexName);
     }
 
@@ -202,14 +208,22 @@ class Program
         // Extract the schema for this index
         // We use REST here because we can take the response as-is
 
-        Uri ServiceUri = new Uri("https://" + SourceSearchServiceName + ".search.windows.net");
+        Uri ServiceUri = new Uri($"https://{SourceSearchServiceName}.search.windows.net");
+
+        // Create the credential and request a token for Azure Cognitive Search
+        var credential = new AzureDeveloperCliCredential();
+        AccessToken token = credential.GetToken(
+            new TokenRequestContext(new[] { "https://search.azure.com/.default" } )
+        );
+
         HttpClient HttpClient = new HttpClient();
-        HttpClient.DefaultRequestHeaders.Add("api-key", SourceAdminKey);
+        HttpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token.Token);
 
         string Schema = string.Empty;
+
         try
         {
-            Uri uri = new Uri(ServiceUri, "/indexes/" + SourceIndexName);
+            Uri uri = new Uri(ServiceUri, $"/indexes/{SourceIndexName}");
             HttpResponseMessage response = AzureSearchHelper.SendSearchRequest(HttpClient, HttpMethod.Get, uri);
             AzureSearchHelper.EnsureSuccessfulSearchResponse(response);
             Schema = response.Content.ReadAsStringAsync().Result;
