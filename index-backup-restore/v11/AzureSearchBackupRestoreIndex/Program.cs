@@ -1,4 +1,4 @@
-﻿// This is a prototype tool that allows for extraction of data from a search index
+// This is a prototype tool that allows for extraction of data from a search index
 // Since this tool is still under development, it should not be used for production usage
 
 using System;
@@ -269,8 +269,16 @@ class Program
         json = json.Substring(0, indexOfIndexName) + TargetIndexName + json.Substring(indexOfEndOfIndexName);
 
         Uri ServiceUri = new Uri("https://" + TargetSearchServiceName + ".search.windows.net");
+
+        // Create the credential and request a token for Azure Cognitive Search
+        var credential = new AzureDeveloperCliCredential();
+        
+        AccessToken token = credential.GetToken(
+            new TokenRequestContext(new[] { "https://search.azure.com/.default" } )
+        );
+
         HttpClient HttpClient = new HttpClient();
-        HttpClient.DefaultRequestHeaders.Add("api-key", TargetAdminKey);
+        HttpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token.Token);
 
         try
         {
