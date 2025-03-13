@@ -1,4 +1,4 @@
-// This is a prototype tool that allows for extraction of data from a search index
+﻿// This is a prototype tool that allows for extraction of data from a search index
 // Since this tool is still under development, it should not be used for production usage
 
 using System;
@@ -23,10 +23,8 @@ namespace AzureSearchBackupRestoreIndex;
 class Program
 {
     private static string SourceSearchServiceName;
-    private static string SourceAdminKey;
     private static string SourceIndexName;
     private static string TargetSearchServiceName;
-    private static string TargetAdminKey;
     private static string TargetIndexName;
     private static string BackupDirectory;
 
@@ -36,7 +34,7 @@ class Program
     private static SearchClient TargetSearchClient;
 
     private static int MaxBatchSize = 500;          // JSON files will contain this many documents / file and can be up to 1000
-    private static int ParallelizedJobs = 10;       // Output content in parallel jobs
+    private static int ParallelizedJobs = 5;       // Output content in parallel jobs
 
     static void Main()
     {
@@ -50,11 +48,12 @@ class Program
 
         //Recreate and import content to target index
 
-        /*
+        
         Console.WriteLine("\nSTART INDEX RESTORE");
         DeleteIndex();
         CreateTargetIndex();
         ImportFromJSON();
+
         Console.WriteLine("\n  Waiting 10 seconds for target to index content...");
         Console.WriteLine("  NOTE: For really large indexes it may take longer to index all content.\n");
         Thread.Sleep(10000);
@@ -65,10 +64,7 @@ class Program
         Console.WriteLine("\nSAFEGUARD CHECK: Source and target index counts should match");
         Console.WriteLine(" Source index contains {0} docs", sourceCount);
         Console.WriteLine(" Target index contains {0} docs\n", targetCount);
-
-        Console.WriteLine("Press any key to continue...");
-        Console.ReadLine();
-        */
+    
     }
 
     static void ConfigurationSetup()
@@ -78,10 +74,8 @@ class Program
         IConfigurationRoot configuration = builder.Build();
 
         SourceSearchServiceName = configuration["SourceSearchServiceName"];
-        SourceAdminKey = configuration["SourceAdminKey"];
         SourceIndexName = configuration["SourceIndexName"];
         TargetSearchServiceName = configuration["TargetSearchServiceName"];
-        TargetAdminKey = configuration["TargetAdminKey"];
         TargetIndexName = configuration["TargetIndexName"];
         BackupDirectory = configuration["BackupDirectory"];
 
@@ -168,7 +162,7 @@ class Program
             json = json.Substring(0, json.Length - 3); // remove trailing comma
             File.WriteAllText(FileName, "{\"value\": [");
             File.AppendAllText(FileName, json);
-            File.AppendAllText(FileName, "]}");
+            File.AppendAllText(FileName, "}]}");
             Console.WriteLine("  Total documents: {0}", response.GetResults().Count().ToString());
             json = string.Empty;
         }
@@ -212,6 +206,7 @@ class Program
 
         // Create the credential and request a token for Azure Cognitive Search
         var credential = new AzureDeveloperCliCredential();
+        
         AccessToken token = credential.GetToken(
             new TokenRequestContext(new[] { "https://search.azure.com/.default" } )
         );
@@ -318,9 +313,18 @@ class Program
     {
         Console.WriteLine("\n  Upload index documents from saved JSON files");
         // Take JSON file and import this as-is to target index
+
         Uri ServiceUri = new Uri("https://" + TargetSearchServiceName + ".search.windows.net");
+
+        // Create the credential and request a token for Azure Cognitive Search
+        var credential = new AzureDeveloperCliCredential();
+        
+        AccessToken token = credential.GetToken(
+            new TokenRequestContext(new[] { "https://search.azure.com/.default" } )
+        );
+
         HttpClient HttpClient = new HttpClient();
-        HttpClient.DefaultRequestHeaders.Add("api-key", TargetAdminKey);
+        HttpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token.Token);
 
         try
         {
